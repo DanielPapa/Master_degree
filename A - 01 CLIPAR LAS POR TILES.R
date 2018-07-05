@@ -1,0 +1,162 @@
+##################################################################################################
+################################                                  ################################
+################################ MESTRADO DANIEL DE ALMEIDA PAPA  ################################
+################################                                  ################################
+##################################################################################################
+
+## ETAPA 01 FOTOTERRA DATA ##  LAS EM TILES
+
+## OBJETIVO DO SCRIPT: CARREGAR LAS FOTOTERRA, RECORTAR EM TILES E RODAR FUNCOES DE ANALISE PRELIMINAR
+
+##################################################################################################
+
+## PRODUTO: 
+## 01 - PASTA COM ARQUIVOS LAS EM TILES de 500 X 500 (78 arquivos)
+## 02 - PASTA COM ARQUIVOS LAS EM TILES_BUFFER DE 1500 X 1500 (buffer de 500 m) PARA CRIAR MDT NA ETAPA 2 
+
+#################################################################################################
+####################### PASTAS / ENDERECOS E CAMINHO DOS DADOS ##################################
+
+tiles_500.path = "E:/MESTRADO/LIDAR_FOTOTERRA/LAS/TILES_500" ## INPUT DOS DADOS LAS DIVIDOS POR TILES
+tiles_buffer.path = "E:/MESTRADO/LIDAR_FOTOTERRA/LAS/TILES_BUFFER" ## INPUT DOS DADOS LAS DIVIDOS POR TILES
+shapes.path = "E:/MESTRADO/LIDAR_FOTOTERRA/SHAPE"  ## ONDE ESTAO OS SHAPES
+las.path = "E:/MESTRADO/LIDAR_FOTOTERRA/LAS"
+
+1+
+	
+
+################################### CARREGANDO PACOTES #########################################
+
+library(lidR)
+library(maptools)
+library(rgdal)
+
+##################### 01.1 LER DADOS LIDAR ####################################################
+
+#info.dados = readlasheader("FOTOTERRA.las")
+all.las = lidR::readLAS(file.path(las.path, "FOTOTERRA.las"))
+#all.las
+
+
+##################### 01.2 CRIAR SHAPE DE TILES A PARTIR DO BUFFER_EMBRAPA ####################################################
+
+
+## carrega shape da area da Embrapa onde tem nuvem de pontos LiDAR ##################################################
+
+shp.lidar<-readOGR(dsn = "E:/MESTRADO/LIDAR_FOTOTERRA/SHAPE", layer="BUFFER_EMBRAPA")
+#x11();plot(shp.lidar)
+
+########################## criar O GRID DE TILES 500 X 500
+
+# tranforma o poligono shp.lidar raster
+grid = raster(extent(shp.lidar)) 
+
+# define a resolucao do grid de varredura
+tamanho.parcela = 500 #(tiles de 500 x 500)
+res(grid) = tamanho.parcela
+
+#define a projecao do grid 
+crs(grid) = crs(shp.lidar) 
+
+#tranforma o grid em poligono
+grid = rasterToPolygons(grid) 
+length((grid))
+
+x11();plot(shp.lidar);plot(grid, add = T)
+
+## clipar as parcelas de 500 x 500 em relacao ao buffer da Embrapa onde esta a nuvem de pontos
+shp.tiles.500 <- intersect(shp.lidar, grid)
+x11();plot(shp.tiles.500)
+
+## calculo de area dELIMINAR PARCELAS MENORES QUE 50X50
+area_buffer_embrapa = sqrt(rgeos::gArea(shp.lidar)); area_buffer_embrapa
+area_shp.tiles.500 = sqrt(rgeos::gArea(grid)); shp.tiles.500
+
+# gerando area de cada parcela
+shp.tiles.500$area = sapply(slot(shp.tiles.500, "polygons"), slot, "area")
+
+## filtro das parcelas com apenas 2500 metros quadrados
+#parcelas.grid = parcelas.grid[which(parcelas.grid$area == 2500),]
+#parcelas.grid = parcelas.grid[which(parcelas.grid$area == 4900),]
+#parcelas.grid = parcelas.grid[which(parcelas.grid$area == 10000),]
+
+x11(); plot(shp.lidar); plot(shp.tiles.500, add = T)
+summary(shp.tiles.500$area)
+
+#gerando o nome id das parcelas
+shp.tiles.500$layer = 1:nrow(data.frame(shp.tiles.500))
+
+length(shp.tiles.500)
+
+
+rgdal::writeOGR(shp.tiles.500, dsn = file.path(shapes.path), "TILES_500x500", driver = "ESRI Shapefile")
+
+
+#######################################################################################################################
+################################## 1.2 LOOPING PARA CLIPAR A NUVEM LIDAR PARA OS 78 TILES_500 #########################
+#######################################################################################################################
+
+
+### OBJETO QUE VAI RODAR DENTRO DO LOOPING  (shape de tiles 500X500)
+
+shp.tiles.500 = rgdal::readOGR(dsn = file.path(shapes.path, "TILES_500x500.shp")) ## SHAPE FOI CRIADO NO QGIS
+x11();plot(shp.tiles.500);  
+
+
+### PASTA QUE SERAH ALIMENTADA COM ARQUIVOS LAS (pasta onde serao salvos os TILES.LAS)
+tiles_500.path = "E:/MESTRADO/LIDAR_FOTOTERRA/LAS/TILES_500" ## PASTA ONDE SERAO SALVOS OS ARQUIVOS LAS POR TILES ###
+
+
+## LISTA DOS NOMES QUE SERAO CRIADOS (converte a tabela de atributos do shape em um data.frame para facilitar processamento)
+df.shp.tiles.500 = data.frame (shp.tiles.500)  
+names.shp.tile.500 = as.vector(shp.tiles.500$layer)
+
+### BUFFER DO TILE PARA GERAR MDT COM MENOR ERRO DE INTERPOLACAO #####################################
+
+margem.extra = 500 # foram testados 50m, 100m, 150m, 200m. Em todas essas houve um ou mais tile com MDT ruim.
+
+
+#######################################################################################################
+############################# INICIO DO FILTRO DE RUIDOS - FASE 01 - SELECAO DE TILE ("i") ############
+#######################################################################################################
+
+
+for (i in 1: length(shp.tiles.500)) {
+  
+  
+  ##### GERAR LAS EM TILES DE 500 X 500 ###############################################################
+  
+  n.tile.500= shp.tiles.500[shp.tiles.500$layer == i,]   ## SELECAO DO TILE 500
+  
+  tile.500.las = lidR::lasclipRectangle(all.las,      ## origem do arquivo LAS FOTOTERRA
+                                    xmin(n.tile.500),  ## LIMITE LONGITUDINAL SUL
+                                    ymin(n.tile.500),  ## LIMITE LATITUDINAL SUL
+                                    xmax(n.tile.500),  ## LIMITE LONGITUDINAL NORTE
+                                    ymax(n.tile.500),  ## LIMITE LATITUDINAL NORTE
+                                    inside = T)       ## CLIPA E PRESERVA A INFORMACAO QUE ESTA DENTRO DA AREA
+  
+  lidR::writeLAS(tile.500.las, file.path(tiles_500.path, paste0(i,"_tile_","500",".las"))) ## EXPORTA O LAS CLIPADO, COM NOME VARIANDO EM FUNCAO DO TILE.
+  
+  ##### GERAR ARQUIVOS LAS COM TILES COM MARGEM EXTRA DEFINIDA ACIMA #######################################################################################
+  
+  tile.buffer.las = lidR::lasclipRectangle(all.las,             ## origem do arquivo LAS FOTOTERRA
+                                          xmin(n.tile.500) - margem.extra,  ## LIMITE LONGITUDINAL SUL
+                                          ymin(n.tile.500) - margem.extra,  ## LIMITE LATITUDINAL SUL
+                                          xmax(n.tile.500) + margem.extra,  ## LIMITE LONGITUDINAL NORTE
+                                          ymax(n.tile.500) + margem.extra,  ## LIMITE LATITUDINAL NORTE
+                                        inside = T)          ## CLIPA E PRESERVA A INFORMACAO QUE ESTA DENTRO DA AREA
+  
+  lidR::writeLAS(tile.buffer.las, file.path(tiles_buffer.path, paste0(i,"_tile_","buffer",".las"))) ## EXPORTA O LAS CLIPADO COM MARGEM SOBRE TILE DE 500X500, COM NOME VARIANDO EM FUNCAO DO TILE_.
+  
+  
+  
+  ## remocao de arquivos gerados ##
+  
+  rm(tile.500.las, n.tile.500, tile.buffer.las)
+  
+  ## monitoramento da excecucao do looping ##
+  
+  print(paste(round(i/length(shp.tiles.500)*100, 2), "%")) ## semi-perfumarias Pulga
+  
+}
+
