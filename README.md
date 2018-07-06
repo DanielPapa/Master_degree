@@ -5,11 +5,6 @@ date: " 12 de julho de 2018"
 output: html_document
 ---
 
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
 ## Processamento de dados Lidar
 
 Esse documento faz parte da dissertação de mestrado do estudante de pós graduação da ESALQ/USP Daniel de Almeida Papa. Aqui estão descritos as principais etapas do processamento de dados Lidar utilizando o programa R. 
