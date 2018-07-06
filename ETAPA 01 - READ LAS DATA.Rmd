@@ -1,0 +1,44 @@
+---
+title: Etapa 01 - READ LAS DATA
+output: github_document
+---
+
+## Objetivos desse Script
+
+Point 1 Carregar a nuvem de dados Lidar
+
+2. Criar grade de polígonos que será usada no processamento
+
+3. Recortar a nuvem com a grade
+
+4. Exportar as nuvens LAS divididas
+
+
+Os dados Lidar costumam ser arquivos de grande extensão. Isso retarda o tempo de processamento e em alguns casos pode travar o programa por falta de memória. Para resolver esse problema, divide-se o arquivo LAS em partes menores.
+
+## Pacotes necessários para essa etapa
+
+```
+library(lidR)
+library(maptools)
+library(rgdal)
+```
+
+
+## Including Code
+
+You can include R code in the document as follows:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
